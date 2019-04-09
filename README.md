@@ -1,0 +1,3 @@
+# casmon
+
+Cassandra monitoring module
