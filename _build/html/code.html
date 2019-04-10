@@ -1,0 +1,189 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Code docs &#8212; casmon 1.0 documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Welcome to casmon’s documentation!" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-casmon">
+<span id="code-docs"></span><h1>Code docs<a class="headerlink" href="#module-casmon" title="Permalink to this headline">¶</a></h1>
+<span class="target" id="module-casmon"></span><dl class="function">
+<dt id="casmon.check_gossip">
+<code class="descclassname">casmon.</code><code class="descname">check_gossip</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#casmon.check_gossip" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check Status of gossip.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="casmon.check_handoff">
+<code class="descclassname">casmon.</code><code class="descname">check_handoff</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#casmon.check_handoff" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check Status of Hinted Handoff (Status of storing future hints on the current node).</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="casmon.check_heapusage">
+<code class="descclassname">casmon.</code><code class="descname">check_heapusage</code><span class="sig-paren">(</span><em>warn_level=7000</em>, <em>crit_level=9000</em><span class="sig-paren">)</span><a class="headerlink" href="#casmon.check_heapusage" title="Permalink to this definition">¶</a></dt>
+<dd><p>Collects information about the heap usage on this host.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>warn_level</strong> – Maximum amount of heap usage, before a warning will be triggered</p></li>
+<li><p><strong>crit_level</strong> – Maximum amount of heap usage, before a critical warning will be triggered</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="casmon.check_load">
+<code class="descclassname">casmon.</code><code class="descname">check_load</code><span class="sig-paren">(</span><em>warn_level=7000</em>, <em>crit_level=10000</em><span class="sig-paren">)</span><a class="headerlink" href="#casmon.check_load" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check load on current node.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="casmon.check_status">
+<code class="descclassname">casmon.</code><code class="descname">check_status</code><span class="sig-paren">(</span><em>warn_level=0</em>, <em>crit_level=1</em><span class="sig-paren">)</span><a class="headerlink" href="#casmon.check_status" title="Permalink to this definition">¶</a></dt>
+<dd><p>Collects information about status and availability of the cassandra nodes.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>warn_level</strong> – Maximum amount of nodes down, before a warning will be triggered</p></li>
+<li><p><strong>crit_level</strong> – Maximum amount of nodes down, before a critical warning will be triggered</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="casmon.collect_gcstats">
+<code class="descclassname">casmon.</code><code class="descname">collect_gcstats</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#casmon.collect_gcstats" title="Permalink to this definition">¶</a></dt>
+<dd><p>Collect Garbage Collection statistics.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="casmon.collect_netstats">
+<code class="descclassname">casmon.</code><code class="descname">collect_netstats</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#casmon.collect_netstats" title="Permalink to this definition">¶</a></dt>
+<dd><p>Collect network statistics on current node.</p>
+</dd></dl>
+
+<dl class="function">
+<dt id="casmon.parse_options">
+<code class="descclassname">casmon.</code><code class="descname">parse_options</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#casmon.parse_options" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parse the arguments this script was called with.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Options as Namespace</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="casmon.print_status_information">
+<code class="descclassname">casmon.</code><code class="descname">print_status_information</code><span class="sig-paren">(</span><em>status</em>, <em>msg</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#casmon.print_status_information" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>status</strong> – Exit status</p></li>
+<li><p><strong>msg</strong> – Service status message</p></li>
+<li><p><strong>kwargs</strong> – Performance data for monitoring</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">casmon</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Code docs</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">Welcome to casmon’s documentation!</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, jhartick.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/code.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

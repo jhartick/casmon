@@ -1,0 +1,257 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Compatibility &#8212; casmon 1.0 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <p>Module pdoc provides types and functions for accessing the public
+documentation of a Python module. This includes modules (and
+sub-modules), functions, classes and module, class and instance
+variables. Docstrings are taken from modules, functions and classes
+using the special <code class="docutils literal notranslate"><span class="pre">__doc__</span></code> attribute. Docstrings for variables are
+extracted by examining the module’s abstract syntax tree.</p>
+<p>The public interface of a module is determined through one of two ways.
+If <code class="docutils literal notranslate"><span class="pre">__all__</span></code> is defined in the module, then all identifiers in that
+list will be considered public. No other identifiers will be considered
+as public. Conversely, if <code class="docutils literal notranslate"><span class="pre">__all__</span></code> is not defined, then <code class="docutils literal notranslate"><span class="pre">pdoc</span></code> will
+heuristically determine the public interface. There are three rules that
+are applied to each identifier in the module:</p>
+<ol class="arabic simple">
+<li><p>If the name starts with an underscore, it is <strong>not</strong> public.</p></li>
+<li><p>If the name is defined in a different module, it is <strong>not</strong> public.</p></li>
+<li><p>If the name refers to an immediate sub-module, then it is public.</p></li>
+</ol>
+<p>Once documentation for a module is created with <code class="docutils literal notranslate"><span class="pre">pdoc.Module</span></code>, it can
+be output as either HTML or plain text using the covenience functions
+<code class="docutils literal notranslate"><span class="pre">pdoc.html</span></code> and <code class="docutils literal notranslate"><span class="pre">pdoc.text</span></code>, or the corresponding methods
+<code class="docutils literal notranslate"><span class="pre">pdoc.Module.html</span></code> and <code class="docutils literal notranslate"><span class="pre">pdoc.Module.text</span></code>.</p>
+<p>Alternatively, you may run an HTTP server with the <code class="docutils literal notranslate"><span class="pre">pdoc</span></code> script
+included with this module.</p>
+<div class="section" id="compatibility">
+<h1>Compatibility<a class="headerlink" href="#compatibility" title="Permalink to this headline">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">pdoc</span></code> has been tested on Python 2.6, 2.7 and 3.3. It seems to work on
+all three.</p>
+</div>
+<div class="section" id="contributing">
+<h1>Contributing<a class="headerlink" href="#contributing" title="Permalink to this headline">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">pdoc</span></code> <a class="reference external" href="https://github.com/BurntSushi/pdoc">is on GitHub</a>. Pull
+requests and bug reports are welcome.</p>
+</div>
+<div class="section" id="linking-to-other-identifiers">
+<h1>Linking to other identifiers<a class="headerlink" href="#linking-to-other-identifiers" title="Permalink to this headline">¶</a></h1>
+<p>In your documentation, you may link to other identifiers in your module
+or submodules. Linking is automatically done for you whenever you
+surround an identifier with a back quote (grave). The identifier name
+must be fully qualified. For example, `pdoc.Doc.docstring` is correct
+while `Doc.docstring` is incorrect.</p>
+<p>If the <code class="docutils literal notranslate"><span class="pre">pdoc</span></code> script is used to run an HTTP server, then external
+linking to other packages installed is possible. No extra work is
+necessary; simply use the fully qualified path. For example,
+`nflvid.slice` will create a link to the <code class="docutils literal notranslate"><span class="pre">nflvid.slice</span></code> function,
+which is <strong>not</strong> a part of <code class="docutils literal notranslate"><span class="pre">pdoc</span></code> at all.</p>
+</div>
+<div class="section" id="where-does-pdoc-get-documentation-from">
+<h1>Where does pdoc get documentation from?<a class="headerlink" href="#where-does-pdoc-get-documentation-from" title="Permalink to this headline">¶</a></h1>
+<p>Broadly speaking, <code class="docutils literal notranslate"><span class="pre">pdoc</span></code> gets everything you see from introspecting
+the module. This includes words describing a particular module, class,
+function or variable. While <code class="docutils literal notranslate"><span class="pre">pdoc</span></code> does some analysis on the source
+code of a module, importing the module itself is necessary to use
+Python’s introspection features.</p>
+<p>In Python, objects like modules, functions, classes and methods have a
+special attribute named <code class="docutils literal notranslate"><span class="pre">__doc__</span></code> which contains that object’s
+<em>docstring</em>. The docstring comes from a special placement of a string in
+your source code. For example, the following code shows how to define a
+function with a docstring and access the contents of that docstring:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="ch">#!python</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="k">def</span> <span class="nf">test</span><span class="p">():</span>
+<span class="o">...</span>     <span class="s1">&#39;&#39;&#39;This is a docstring.&#39;&#39;&#39;</span>
+<span class="o">...</span>     <span class="k">pass</span>
+<span class="o">...</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="n">test</span><span class="o">.</span><span class="vm">__doc__</span>
+<span class="s1">&#39;This is a docstring.&#39;</span>
+</pre></div>
+</div>
+<p>Something similar can be done for classes and modules too. For classes,
+the docstring should come on the line immediately following
+<code class="docutils literal notranslate"><span class="pre">class</span> <span class="pre">...</span></code>. For modules, the docstring should start on the first line
+of the file. These docstrings are what you see for each module, class,
+function and method listed in the documentation produced by <code class="docutils literal notranslate"><span class="pre">pdoc</span></code>.</p>
+<p>The above just about covers <em>standard</em> uses of docstrings in Python.
+<code class="docutils literal notranslate"><span class="pre">pdoc</span></code> extends the above in a few important ways.</p>
+<div class="section" id="special-docstring-conventions-used-by-pdoc">
+<h2>Special docstring conventions used by <code class="docutils literal notranslate"><span class="pre">pdoc</span></code><a class="headerlink" href="#special-docstring-conventions-used-by-pdoc" title="Permalink to this headline">¶</a></h2>
+<p><strong>Firstly</strong>, docstrings can be inherited. Consider the following code
+sample:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="ch">#!python</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="k">class</span> <span class="nc">A</span> <span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+<span class="o">...</span>     <span class="k">def</span> <span class="nf">test</span><span class="p">():</span>
+<span class="o">...</span>         <span class="s1">&#39;&#39;&#39;Docstring for A.&#39;&#39;&#39;</span>
+<span class="o">...</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="k">class</span> <span class="nc">B</span> <span class="p">(</span><span class="n">A</span><span class="p">):</span>
+<span class="o">...</span>     <span class="k">def</span> <span class="nf">test</span><span class="p">():</span>
+<span class="o">...</span>         <span class="k">pass</span>
+<span class="o">...</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="nb">print</span><span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="vm">__doc__</span><span class="p">)</span>
+<span class="n">Docstring</span> <span class="k">for</span> <span class="n">A</span><span class="o">.</span>
+<span class="o">&gt;&gt;&gt;</span> <span class="nb">print</span><span class="p">(</span><span class="n">B</span><span class="o">.</span><span class="n">test</span><span class="o">.</span><span class="vm">__doc__</span><span class="p">)</span>
+<span class="kc">None</span>
+</pre></div>
+</div>
+<p>In Python, the docstring for <code class="docutils literal notranslate"><span class="pre">B.test</span></code> is empty, even though one was
+defined in <code class="docutils literal notranslate"><span class="pre">A.test</span></code>. If <code class="docutils literal notranslate"><span class="pre">pdoc</span></code> generates documentation for the above
+code, then it will automatically attach the docstring for <code class="docutils literal notranslate"><span class="pre">A.test</span></code> to
+<code class="docutils literal notranslate"><span class="pre">B.test</span></code> only if <code class="docutils literal notranslate"><span class="pre">B.test</span></code> does not have a docstring. In the default
+HTML output, an inherited docstring is grey.</p>
+<p><strong>Secondly</strong>, docstrings can be attached to variables, which includes
+module (or global) variables, class variables and instance variables.
+Python by itself <a class="reference external" href="http://www.python.org/dev/peps/pep-0224">does not allow docstrings to be attached to
+variables</a>. For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="ch">#!python</span>
+<span class="n">variable</span> <span class="o">=</span> <span class="s2">&quot;SomeValue&quot;</span>
+<span class="sd">&#39;&#39;&#39;Docstring for variable.&#39;&#39;&#39;</span>
+</pre></div>
+</div>
+<p>The resulting <code class="docutils literal notranslate"><span class="pre">variable</span></code> will have no <code class="docutils literal notranslate"><span class="pre">__doc__</span></code> attribute. To
+compensate, <code class="docutils literal notranslate"><span class="pre">pdoc</span></code> will read the source code when it’s available to
+infer a connection between a variable and a docstring. The connection is
+only made when an assignment statement is followed by a docstring.</p>
+<p>Something similar is done for instance variables as well. By convention,
+instance variables are initialized in a class’s <code class="docutils literal notranslate"><span class="pre">__init__</span></code> method.
+Therefore, <code class="docutils literal notranslate"><span class="pre">pdoc</span></code> adheres to that convention and looks for docstrings
+of variables like so:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="ch">#!python</span>
+<span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+    <span class="bp">self</span><span class="o">.</span><span class="n">variable</span> <span class="o">=</span> <span class="s2">&quot;SomeValue&quot;</span>
+    <span class="sd">&#39;&#39;&#39;Docstring for instance variable.&#39;&#39;&#39;</span>
+</pre></div>
+</div>
+<p>Note that <code class="docutils literal notranslate"><span class="pre">pdoc</span></code> only considers attributes defined on <code class="docutils literal notranslate"><span class="pre">self</span></code> as
+instance variables.</p>
+<p>Class and instance variables can also have inherited docstrings.</p>
+<p><strong>Thirdly and finally</strong>, docstrings can be overridden with a special
+<code class="docutils literal notranslate"><span class="pre">__pdoc__</span></code> dictionary that <code class="docutils literal notranslate"><span class="pre">pdoc</span></code> inspects if it exists. The keys of
+<code class="docutils literal notranslate"><span class="pre">__pdoc__</span></code> should be identifiers within the scope of the module. (In
+the case of an instance variable <code class="docutils literal notranslate"><span class="pre">self.variable</span></code> for class <code class="docutils literal notranslate"><span class="pre">A</span></code>, its
+module identifier would be <code class="docutils literal notranslate"><span class="pre">A.variable</span></code>.) The values of <code class="docutils literal notranslate"><span class="pre">__pdoc__</span></code>
+should be docstrings.</p>
+<p>This particular feature is useful when there’s no feasible way of
+attaching a docstring to something. A good example of this is a
+<a class="reference external" href="http://goo.gl/akfXJ9">namedtuple</a>:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="ch">#!python</span>
+<span class="n">__pdoc__</span> <span class="o">=</span> <span class="p">{}</span>
+
+<span class="n">Table</span> <span class="o">=</span> <span class="n">namedtuple</span><span class="p">(</span><span class="s1">&#39;Table&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;types&#39;</span><span class="p">,</span> <span class="s1">&#39;names&#39;</span><span class="p">,</span> <span class="s1">&#39;rows&#39;</span><span class="p">])</span>
+<span class="n">__pdoc__</span><span class="p">[</span><span class="s1">&#39;Table.types&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;Types for each column in the table.&#39;</span>
+<span class="n">__pdoc__</span><span class="p">[</span><span class="s1">&#39;Table.names&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;The names of each column in the table.&#39;</span>
+<span class="n">__pdoc__</span><span class="p">[</span><span class="s1">&#39;Table.rows&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;Lists corresponding to each row in the table.&#39;</span>
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">pdoc</span></code> will then show <code class="docutils literal notranslate"><span class="pre">Table</span></code> as a class with documentation for the
+<code class="docutils literal notranslate"><span class="pre">types</span></code>, <code class="docutils literal notranslate"><span class="pre">names</span></code> and <code class="docutils literal notranslate"><span class="pre">rows</span></code> members.</p>
+<p>Note that assignments to <code class="docutils literal notranslate"><span class="pre">__pdoc__</span></code> need to placed where they’ll be
+executed when the module is imported. For example, at the top level of a
+module or in the definition of a class.</p>
+<p>If <code class="docutils literal notranslate"><span class="pre">__pdoc__[key]</span> <span class="pre">=</span> <span class="pre">None</span></code>, then <code class="docutils literal notranslate"><span class="pre">key</span></code> will not be included in the
+public interface of the module.</p>
+</div>
+</div>
+<div class="section" id="license">
+<h1>License<a class="headerlink" href="#license" title="Permalink to this headline">¶</a></h1>
+<p><code class="docutils literal notranslate"><span class="pre">pdoc</span></code> is in the public domain via the
+<a class="reference external" href="http://unlicense.org">UNLICENSE</a>.</p>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">casmon</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../code.html">Code docs</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, jhartick.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../../../_sources/venv37/share/pdoc/longdesc.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -158,6 +158,7 @@ def check_status(warn_level=STATUS_WARN, crit_level=STATUS_CRIT):
         print_status_information('Ok', 'All nodes are up and running', dc=dc)
     print_status_information('Ok', 'Enough nodes are up and running', dc=dc)
 
+
 def collect_tpstats():
     pass
     """
@@ -172,10 +173,6 @@ def collect_tpstats():
 def parse_options():
     """
     Parse the arguments this script was called with.
-
-    Test String:
-    cd C:\Users\A50768110\Desktop\jhartick\Arbeit\03_Repo\PycharmProjects\UpgradeCheck_27\src\com\t-systems\casmon
-    C:\Users\A50768110\Desktop\jhartick\Arbeit\03_Repo\PycharmProjects\UpgradeCheck_27\venv\Scripts\python.exe casmon.py -h
 
     :return: Options as Namespace
     """
@@ -225,16 +222,6 @@ def parse_options():
         help="""netstats = Network statistics""" +
              """\ngcstats = Garbage Collection statistics"""
     )
-
-    """
-    parser.add_argument(
-        'w',
-        type=int,
-        help='Set warning level\ne.g.: ' + sys.argv[0] + ' memory -w 100'
-             '\nDisplay a warning if heap usage exceeds 100 Mb'
-    )
-    parser.add_argument('c', type=int, help='Display critical status if limit is exceeded')
-    """
     return parser.parse_args()
 
 
@@ -258,35 +245,6 @@ def print_status_information(status, msg, **kwargs):
         status_information += ' | ' + kwargs_str
     print(status_information)
     exit(code)
-
-
-class FileHandler:
-    def __init__(self):
-        pass
-
-    @staticmethod
-    def readbytes(path, bytes):
-        if os.path.isfile(path):
-            with open(path, 'r') as f:
-                return f.read(bytes)
-
-    @staticmethod
-    def readlines(path, keepends=False):
-        with open(path, 'r') as f:
-            return f.read().splitlines(keepends)
-
-    @staticmethod
-    def read(path, binary):
-        mode = 'r'
-        if bytes:
-            mode = 'rb'
-        with open(path, mode) as f:
-            return f.read()
-
-    @staticmethod
-    def write(path, data):
-        with open(path, 'w') as f:
-            f.write(data)
 
 
 if __name__ == '__main__':
