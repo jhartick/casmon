@@ -11,12 +11,11 @@ import subprocess
 from argparse import RawTextHelpFormatter
 
 # Global warn and crit defaults
-STATUS_WARN = 0
-STATUS_CRIT = 1
-HEAP_WARN = 7000
-HEAP_CRIT = 9000
-LOAD_WARN = 7000
-LOAD_CRIT = 10000
+DEFAULTS = {
+    'status':   {'warn': 0,     'crit': 1},
+    'heap':     {'warn': 7000,  'crit': 9000},
+    'load':     {'warn': 7000,  'crit': 10000}
+}
 
 NODETOOL = os.path.normpath('/applications/cassandra/bin/nodetool')
 SHELL = '/bin/sh'
@@ -29,7 +28,7 @@ SERVICE_STATUS = {
 }
 
 
-def main():
+def casmon():
     options = parse_options()
     action = {
         'gcstats':  collect_gcstats,
@@ -59,8 +58,9 @@ def collect_gcstats():
     line_columns = res.splitlines()[1].split()
     stats = ['interval', 'max_gc_elapsed', 'total_gc_elapsed', 'stdev_gc_elapsed', 'gc_reclaimed']
     gc_stats = {}
-    for s in stats:
-        gc_stats[s] = line_columns[stats.index(s)]
+
+    for i, stat in enumerate(stats):
+        gc_stats[stat] = line_columns[i]
     print_status_information('Ok', 'Garbage Collection statistics', **gc_stats)
 
 
@@ -84,7 +84,7 @@ def check_handoff():
     print_status_information('Warning', 'Hinted handoff is not running')
 
 
-def check_heapusage(warn_level=HEAP_WARN, crit_level=HEAP_CRIT):
+def check_heapusage(warn_level=DEFAULTS['heap']['warn'], crit_level=DEFAULTS['heap']['crit']):
     """
     Collects information about the heap usage on this host.
 
@@ -103,7 +103,7 @@ def check_heapusage(warn_level=HEAP_WARN, crit_level=HEAP_CRIT):
     print_status_information('Ok', 'Heap usage is normal', heap_used=heap_usage)
 
 
-def check_load(warn_level=LOAD_WARN, crit_level=LOAD_CRIT):
+def check_load(warn_level=DEFAULTS['load']['warn'], crit_level=DEFAULTS['load']['crit']):
     """
     Check load of the current node.
     """
@@ -136,7 +136,7 @@ def collect_netstats():
     print_status_information('Ok', 'Netstats', **stats)
 
 
-def check_status(warn_level=STATUS_WARN, crit_level=STATUS_CRIT):
+def check_status(warn_level=DEFAULTS['status']['warn'], crit_level=DEFAULTS['status']['crit']):
     """
     Collects information about status and availability of the cassandra nodes.
 
@@ -256,4 +256,4 @@ def print_status_information(status, msg, **kwargs):
 
 
 if __name__ == '__main__':
-    main()
+    casmon()
