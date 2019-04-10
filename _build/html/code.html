@@ -33,7 +33,10 @@
             
   <div class="section" id="module-casmon">
 <span id="code-docs"></span><h1>Code docs<a class="headerlink" href="#module-casmon" title="Permalink to this headline">¶</a></h1>
-<span class="target" id="module-casmon"></span><dl class="function">
+<span class="target" id="module-casmon"></span><p>Python module which provides an interface for querying information from the Cassandra nodetool. This script is
+intended to be used in combination with the Nagios or Icinga client. The Output format is defined by the Icinga and
+Nagios rule sets. (<a class="reference external" href="https://www.monitoring-plugins.org/doc/guidelines.html#PLUGOUTPUT">https://www.monitoring-plugins.org/doc/guidelines.html#PLUGOUTPUT</a>)</p>
+<dl class="function">
 <dt id="casmon.check_gossip">
 <code class="descclassname">casmon.</code><code class="descname">check_gossip</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#casmon.check_gossip" title="Permalink to this definition">¶</a></dt>
 <dd><p>Check Status of gossip.</p>
@@ -62,7 +65,7 @@
 <dl class="function">
 <dt id="casmon.check_load">
 <code class="descclassname">casmon.</code><code class="descname">check_load</code><span class="sig-paren">(</span><em>warn_level=7000</em>, <em>crit_level=10000</em><span class="sig-paren">)</span><a class="headerlink" href="#casmon.check_load" title="Permalink to this definition">¶</a></dt>
-<dd><p>Check load on current node.</p>
+<dd><p>Check load of the current node.</p>
 </dd></dl>
 
 <dl class="function">
@@ -82,13 +85,13 @@
 <dl class="function">
 <dt id="casmon.collect_gcstats">
 <code class="descclassname">casmon.</code><code class="descname">collect_gcstats</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#casmon.collect_gcstats" title="Permalink to this definition">¶</a></dt>
-<dd><p>Collect Garbage Collection statistics.</p>
+<dd><p>Collect Garbage Collection statistics on the current node.</p>
 </dd></dl>
 
 <dl class="function">
 <dt id="casmon.collect_netstats">
 <code class="descclassname">casmon.</code><code class="descname">collect_netstats</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#casmon.collect_netstats" title="Permalink to this definition">¶</a></dt>
-<dd><p>Collect network statistics on current node.</p>
+<dd><p>Collect network statistics on the current node.</p>
 </dd></dl>
 
 <dl class="function">
@@ -105,7 +108,9 @@
 <dl class="function">
 <dt id="casmon.print_status_information">
 <code class="descclassname">casmon.</code><code class="descname">print_status_information</code><span class="sig-paren">(</span><em>status</em>, <em>msg</em>, <em>**kwargs</em><span class="sig-paren">)</span><a class="headerlink" href="#casmon.print_status_information" title="Permalink to this definition">¶</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Prints service status to stdout. Output is formatted according to the Nagios / Icinga formatting rules.
+(<a class="reference external" href="https://www.monitoring-plugins.org/doc/guidelines.html#PLUGOUTPUT">https://www.monitoring-plugins.org/doc/guidelines.html#PLUGOUTPUT</a>)</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>status</strong> – Exit status</p></li>

@@ -1,4 +1,9 @@
 #!/usr/bin/python2
+"""
+Python module which provides an interface for querying information from the Cassandra nodetool. This script is
+intended to be used in combination with the Nagios or Icinga client. The Output format is defined by the Icinga and
+Nagios rule sets. (https://www.monitoring-plugins.org/doc/guidelines.html#PLUGOUTPUT)
+"""
 import argparse
 import os
 import re
@@ -48,7 +53,7 @@ def main():
 
 def collect_gcstats():
     """
-    Collect Garbage Collection statistics.
+    Collect Garbage Collection statistics on the current node.
     """
     res = subprocess.check_output([NODETOOL, 'gcstats'])
     line_columns = res.splitlines()[1].split()
@@ -100,7 +105,7 @@ def check_heapusage(warn_level=HEAP_WARN, crit_level=HEAP_CRIT):
 
 def check_load(warn_level=LOAD_WARN, crit_level=LOAD_CRIT):
     """
-    Check load on current node.
+    Check load of the current node.
     """
     res = subprocess.check_output([NODETOOL, 'info'])
     load_regex_result = re.search(r'Load\s*:\s*([\d,.]+)\sMiB', res)
@@ -116,7 +121,7 @@ def check_load(warn_level=LOAD_WARN, crit_level=LOAD_CRIT):
 
 def collect_netstats():
     """
-    Collect network statistics on current node.
+    Collect network statistics on the current node.
     """
     res = subprocess.check_output([NODETOOL, 'netstats'])
     res_lines = res.splitlines()
@@ -227,6 +232,9 @@ def parse_options():
 
 def print_status_information(status, msg, **kwargs):
     """
+    Prints service status to stdout. Output is formatted according to the Nagios / Icinga formatting rules.
+    (https://www.monitoring-plugins.org/doc/guidelines.html#PLUGOUTPUT)
+
     :param status: Exit status
     :param msg: Service status message
     :param kwargs: Performance data for monitoring
