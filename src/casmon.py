@@ -51,9 +51,7 @@ def casmon():
 
 
 def collect_gcstats():
-    """
-    Collect Garbage Collection statistics on the current node.
-    """
+    """Collect Garbage Collection statistics on the current node."""
     res = subprocess.check_output([NODETOOL, 'gcstats'])
     line_columns = res.splitlines()[1].split()
     stats = ['interval', 'max_gc_elapsed', 'total_gc_elapsed', 'stdev_gc_elapsed', 'gc_reclaimed']
@@ -65,9 +63,7 @@ def collect_gcstats():
 
 
 def check_gossip():
-    """
-    Check Status of gossip.
-    """
+    """Check Status of gossip."""
     res = subprocess.check_output([NODETOOL, 'statusgossip'])
     if re.search(r'^running', res):
         print_status_information('Ok', 'Gossip is running')
@@ -75,9 +71,7 @@ def check_gossip():
 
 
 def check_handoff():
-    """
-    Check Status of Hinted Handoff (Status of storing future hints on the current node).
-    """
+    """Check Status of Hinted Handoff (Status of storing future hints on the current node)."""
     res = subprocess.check_output([NODETOOL, 'statushandoff'])
     if re.search(r'^Hinted handoff is running', res):
         print_status_information('Ok', 'Hinted handoff is running')
@@ -104,13 +98,11 @@ def check_heapusage(warn_level=DEFAULTS['heap']['warn'], crit_level=DEFAULTS['he
 
 
 def check_load(warn_level=DEFAULTS['load']['warn'], crit_level=DEFAULTS['load']['crit']):
-    """
-    Check load of the current node.
-    """
+    """Check load of the current node."""
     res = subprocess.check_output([NODETOOL, 'info'])
     load_regex_result = re.search(r'Load\s*:\s*([\d,.]+)\sMiB', res)
     if load_regex_result is None:
-        print_status_information('Unknown','Unable to retrieve load information')
+        print_status_information('Unknown', 'Unable to retrieve load information')
     load = float(load_regex_result.group(1))
     if load > crit_level:
         print_status_information('Critical', 'node load is very high')
@@ -120,9 +112,7 @@ def check_load(warn_level=DEFAULTS['load']['warn'], crit_level=DEFAULTS['load'][
 
 
 def collect_netstats():
-    """
-    Collect network statistics on the current node.
-    """
+    """Collect network statistics on the current node."""
     res = subprocess.check_output([NODETOOL, 'netstats'])
     res_lines = res.splitlines()
     message_stats = res_lines[len(res_lines)-3:len(res_lines)]
