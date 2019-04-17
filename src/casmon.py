@@ -5,6 +5,7 @@ intended to be used in combination with the Nagios or Icinga client. The Output 
 Nagios rule sets. (https://www.monitoring-plugins.org/doc/guidelines.html#PLUGOUTPUT)
 """
 import argparse
+import math
 import os
 import re
 import subprocess
@@ -13,8 +14,8 @@ from argparse import RawTextHelpFormatter
 # Global warn and crit defaults
 DEFAULTS = {
     'status':   {'warn': 0,     'crit': 1},
-    'heap':     {'warn': 7000,  'crit': 9000},
-    'load':     {'warn': 7000,  'crit': 10000}
+    'heap':     {'warn': 1,  'crit': 2},
+    'load':     {'warn': 1,  'crit': 2}
 }
 
 NODETOOL = os.path.normpath('/applications/cassandra/bin/nodetool')
@@ -86,33 +87,36 @@ def check_heapusage(warn_level=DEFAULTS['heap']['warn'], crit_level=DEFAULTS['he
     :param crit_level: Maximum amount of heap usage, before a critical warning will be triggered
     """
     res = subprocess.check_output([NODETOOL, 'info'])
-    heap_regex_result = re.search(r'Heap Memory \(MB\)\s*:\s*([\d,.]+)\s/\s([\d,.]+)', res)
+    heap_regex_result = re.search(r'Heap Memory \((MB)\)\s*:\s*([\d,.]+)\s/\s([\d,.]+)', res)
     if heap_regex_result is None:
         print_status_information('Unknown', 'Unable to retrieve heap information')
-    heap_usage = float(heap_regex_result.group(1))
+
+    heap_usage = float(heap_regex_result.group(2))
+    # TODO
+
     if heap_usage > crit_level:
-        print_status_information('Critical', 'node heap usage is very high')
+        print_status_information('Critical', 'node heap usage is very high', heap_used=heap_usage)
     if heap_usage > warn_level:
-        print_status_information('Warning', 'node heap usage is high')
+        print_status_information('Warning', 'node heap usage is high', heap_used=heap_usage)
     print_status_information('Ok', 'Heap usage is normal', heap_used=heap_usage)
 
 
 def check_load(warn_level=DEFAULTS['load']['warn'], crit_level=DEFAULTS['load']['crit']):
-    """Check load of the current node."""
+    """ Check load of the current node. """
     res = subprocess.check_output([NODETOOL, 'info'])
     load_regex_result = re.search(r'Load\s*:\s*([\d,.]+)\sMiB', res)
     if load_regex_result is None:
         print_status_information('Unknown', 'Unable to retrieve load information')
     load = float(load_regex_result.group(1))
     if load > crit_level:
-        print_status_information('Critical', 'node load is very high')
+        print_status_information('Critical', 'node load is very high', noad_load_mib=load)
     if load > warn_level:
-        print_status_information('Warning', 'node load is high')
+        print_status_information('Warning', 'node load is high', noad_load_mib=load)
     print_status_information('Ok', 'node load is normal', noad_load_mib=load)
 
 
 def collect_netstats():
-    """Collect network statistics on the current node."""
+    """ Collect network statistics on the current node. """
     res = subprocess.check_output([NODETOOL, 'netstats'])
     res_lines = res.splitlines()
     message_stats = res_lines[len(res_lines)-3:len(res_lines)]
@@ -243,6 +247,152 @@ def print_status_information(status, msg, **kwargs):
         status_information += ' | ' + kwargs_str
     print(status_information)
     exit(code)
+
+
+def enum(*sequential, **named):
+    """
+    Enum backport for Python2.x
+
+    Usage: myenum = enum('KIB', 'MIB'
+    Access: myenum.KIB
+
+    :param type: Object type (required for later checking)
+    :param sequential:
+    :param named:
+    :return: Enum
+    """
+    enums = dict(zip(sequential, range(len(sequential))), **named)
+    reverse = dict((value, key) for key, value in enums.iteritems())
+    enums['reverse_mapping'] = reverse
+
+    @staticmethod
+    def from_string(text):
+        return enums.get(text)
+
+    enums['from_string'] = from_string
+    enums['items'] = [i for i in sequential]
+    return type('Enum', (), enums)
+
+
+class NumeralSystem(object):
+    """ Base Class for creating numeral systems """
+    def __init__(self):
+        pass
+
+
+class Decimal(NumeralSystem):
+    """ Decimal numeral system """
+    base = 1000
+    units = enum('B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB')
+
+    def __init__(self):
+        NumeralSystem.__init__(self)
+
+
+class Binary(NumeralSystem):
+    """ Binary numeral system """
+    base = 1024
+    units = enum('B', 'KIB', 'MIB', 'GIB', 'TIB', 'PIB', 'EIB', 'ZIB', 'YIB')
+
+    def __init__(self):
+        NumeralSystem.__init__(self)
+
+
+class Converter(object):
+    """ Class for performing """
+    def __init__(self):
+        pass
+
+    @staticmethod
+    def convert(value, from_type, to_type, _from=None, to=None, precision=None):
+        """
+        Converts a number to the desired numeral system and unit.
+
+        :param value: Value to be converted
+        :param _from: Current numeral system
+        :param to: Required numeral system
+        :param from_type: Current unit of the number (case insensitive)
+                          e.g. 'MIB' or Binary.units.MIB
+        :param to_type: Required unit of the number (case insensitive)
+                        e.g. 'mb' or Decimal.units.MB
+        :param precision:   Amount of fractional digits. (e.g: precision = 3 -> result = 64.135)
+                            The last digit is rounded up.
+        :return: The result of the conversion
+        """
+
+        # Omitting the numeral system is allowed but results in slightly worse execution performance.
+        if _from is None:
+            _from = Converter.get_ns_from_unit(from_type)
+        else:
+            if _from not in NumeralSystem.__subclasses__():
+                raise NotImplementedError("Unknown numeral system.")
+        if to is None:
+            to = Converter.get_ns_from_unit(to_type)
+        else:
+            if to not in NumeralSystem.__subclasses__():
+                raise NotImplementedError("Unknown numeral system.")
+
+        # Allow specification of data unit as str instead of enforcing the specification over the enum
+        # e.g.: 'mib' | 'MB'    instead of    Binary.units.MIB | Binary.units.MB
+        if type(from_type) is str:
+            from_type = from_type.upper()
+            from_type = _from.units.from_string(from_type)
+        if type(to_type) is str:
+            to_type = to_type.upper()
+            to_type = to.units.from_string(to_type)
+
+        bytes = Converter._to_bytes(float(value), from_type, _from.base)
+        multitude = Converter._to_multitude(bytes, to_type, to.base)
+        if precision is not None:
+            precision = math.pow(10, precision)
+            multitude = math.ceil(multitude*precision)/precision
+        return multitude
+
+    @staticmethod
+    def _to_bytes(value, iter_count, base):
+        """
+        Convert a value to bytes
+
+        :param value:
+        :param iter_count: The number of iterations required
+        :param base: The numeral system base
+        :return: The value in bytes
+        """
+        for i in range(0, iter_count):
+            value = float(value) * float(base)
+        return value
+
+    @staticmethod
+    def _to_multitude(value, iter_count, base):
+        """
+        Convert a byte value to a higher order of magnitude
+
+        :param value:
+        :param iter_count: The number of iterations required
+        :param base: The numeral system base
+        :return: The value in the required order of multitude
+        """
+        for i in range(0, iter_count):
+            value = float(value) / float(base)
+        return value
+
+    @staticmethod
+    def get_ns_from_unit(unit):
+        """
+        Retrieve numeral system from unit str
+
+        :param unit: The unit as str
+        :return: The numeral system class
+        :raise NotImplementedError: If the numeral system could not be identified.
+        """
+        for ns in NumeralSystem.__subclasses__():
+            if type(unit) is str:
+                if unit in ns.units.items:
+                    return ns
+            else:
+                if unit in ns.units.reverse_mapping:
+                    return ns
+        raise NotImplementedError("Unknown numeral system.")
 
 
 if __name__ == '__main__':
