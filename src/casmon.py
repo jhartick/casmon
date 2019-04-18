@@ -18,6 +18,9 @@ DEFAULTS = {
     'load':     {'warn': 1,  'crit': 2}
 }
 
+DATA_UNIT = 'GB'
+DATA_OUTPUT_PRECISION = None
+
 NODETOOL = os.path.normpath('/applications/cassandra/bin/nodetool')
 SHELL = '/bin/sh'
 
@@ -41,6 +44,15 @@ def casmon():
         'status':   check_status,
         'tpstats':  collect_tpstats
     }
+    if hasattr(options, 'unit'):
+        if options.unit is not None:
+            global DATA_UNIT
+            DATA_UNIT = options.unit
+            Converter.get_ns_from_unit(DATA_UNIT)
+    if hasattr(options, 'precision'):
+        if options.precision is not None:
+            global DATA_OUTPUT_PRECISION
+            DATA_OUTPUT_PRECISION = options.precision
     if hasattr(options, 'warn_level') or hasattr(options, 'crit_level'):
         if options.warn_level is not None and options.crit_level is not None:
             action[options.action](warn_level=options.warn_level, crit_level=options.crit_level)
@@ -87,32 +99,33 @@ def check_heapusage(warn_level=DEFAULTS['heap']['warn'], crit_level=DEFAULTS['he
     :param crit_level: Maximum amount of heap usage, before a critical warning will be triggered
     """
     res = subprocess.check_output([NODETOOL, 'info'])
-    heap_regex_result = re.search(r'Heap Memory \((MB)\)\s*:\s*([\d,.]+)\s/\s([\d,.]+)', res)
+    heap_regex_result = re.search(r'Heap Memory \((\w+)\)\s*:\s*([\d,.]+)\s/\s([\d,.]+)', res)
     if heap_regex_result is None:
         print_status_information('Unknown', 'Unable to retrieve heap information')
-
+    heap_total = float(heap_regex_result.group(3))
     heap_usage = float(heap_regex_result.group(2))
-    # TODO
-
+    heap_total = Converter.convert(heap_total, heap_regex_result.group(1), DATA_UNIT, precision=DATA_OUTPUT_PRECISION)
+    heap_usage = Converter.convert(heap_usage, heap_regex_result.group(1), DATA_UNIT, precision=DATA_OUTPUT_PRECISION)
     if heap_usage > crit_level:
-        print_status_information('Critical', 'node heap usage is very high', heap_used=heap_usage)
+        print_status_information('Critical', 'node heap usage is very high', heap_used=heap_usage, heap_total=heap_total)
     if heap_usage > warn_level:
-        print_status_information('Warning', 'node heap usage is high', heap_used=heap_usage)
-    print_status_information('Ok', 'Heap usage is normal', heap_used=heap_usage)
+        print_status_information('Warning', 'node heap usage is high', heap_used=heap_usage, heap_total=heap_total)
+    print_status_information('Ok', 'Heap usage is normal', heap_used=heap_usage, heap_total=heap_total)
 
 
 def check_load(warn_level=DEFAULTS['load']['warn'], crit_level=DEFAULTS['load']['crit']):
     """ Check load of the current node. """
     res = subprocess.check_output([NODETOOL, 'info'])
-    load_regex_result = re.search(r'Load\s*:\s*([\d,.]+)\sMiB', res)
+    load_regex_result = re.search(r'Load\s*:\s*([\d,.]+)\s(\w+)', res)
     if load_regex_result is None:
         print_status_information('Unknown', 'Unable to retrieve load information')
     load = float(load_regex_result.group(1))
+    load = Converter.convert(load, load_regex_result.group(2), DATA_UNIT, precision=DATA_OUTPUT_PRECISION)
     if load > crit_level:
-        print_status_information('Critical', 'node load is very high', noad_load_mib=load)
+        print_status_information('Critical', 'node load is very high', noad_load=load)
     if load > warn_level:
-        print_status_information('Warning', 'node load is high', noad_load_mib=load)
-    print_status_information('Ok', 'node load is normal', noad_load_mib=load)
+        print_status_information('Warning', 'node load is high', noad_load=load)
+    print_status_information('Ok', 'node load is normal', noad_load=load)
 
 
 def collect_netstats():
@@ -187,16 +200,30 @@ def parse_options():
     parser_check.add_argument(
         '-w', '--warning',
         dest='warn_level',
-        type=int,
+        type=float,
         required=False,
         help='Display warning status if the specified limit is exceeded'
     )
     parser_check.add_argument(
         '-c', '--critical',
         dest='crit_level',
-        type=int,
+        type=float,
         required=False,
         help='Display critical status if the specified limit is exceeded'
+    )
+    parser_check.add_argument(
+        '-u', '--unit',
+        dest='unit',
+        type=str,
+        required=False,
+        help='Set in-/output data unit (Default: ' + DATA_UNIT + ')'
+    )
+    parser_check.add_argument(
+        '-p', '--precision',
+        dest='precision',
+        type=int,
+        required=False,
+        help='Set output data precision / number of fractional digits (Default: ' + str(DATA_OUTPUT_PRECISION) + ')'
     )
     parser_check.add_argument(
         'action',
@@ -385,6 +412,7 @@ class Converter(object):
         :return: The numeral system class
         :raise NotImplementedError: If the numeral system could not be identified.
         """
+        unit = unit.upper()
         for ns in NumeralSystem.__subclasses__():
             if type(unit) is str:
                 if unit in ns.units.items:
@@ -393,7 +421,6 @@ class Converter(object):
                 if unit in ns.units.reverse_mapping:
                     return ns
         raise NotImplementedError("Unknown numeral system.")
-
 
 if __name__ == '__main__':
     casmon()
