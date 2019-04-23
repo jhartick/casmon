@@ -2,7 +2,7 @@
 """
 Python module which provides an interface for querying information from the Cassandra nodetool. This script is
 intended to be used in combination with the Nagios or Icinga client. The Output format is defined by the Icinga and
-Nagios rule sets. (https://www.monitoring-plugins.org/doc/guidelines.html#PLUGOUTPUT)
+Nagios rule sets. (https://www.monitoring-plugins.org/doc/guidelines.html)
 """
 import argparse
 import math
@@ -13,7 +13,7 @@ from argparse import RawTextHelpFormatter
 
 # Global warn and crit defaults
 DEFAULTS = {
-    'status':   {'warn': 0,     'crit': 1},
+    'status':   {'warn': 0,  'crit': 1},
     'heap':     {'warn': 1,  'crit': 2},
     'load':     {'warn': 1,  'crit': 2}
 }
@@ -48,7 +48,7 @@ def casmon():
         if options.unit is not None:
             global DATA_UNIT
             DATA_UNIT = options.unit
-            Converter.get_ns_from_unit(DATA_UNIT)
+            ByteConverter.get_ns_from_unit(DATA_UNIT)
     if hasattr(options, 'precision'):
         if options.precision is not None:
             global DATA_OUTPUT_PRECISION
@@ -104,8 +104,8 @@ def check_heapusage(warn_level=DEFAULTS['heap']['warn'], crit_level=DEFAULTS['he
         print_status_information('Unknown', 'Unable to retrieve heap information')
     heap_total = float(heap_regex_result.group(3))
     heap_usage = float(heap_regex_result.group(2))
-    heap_total = Converter.convert(heap_total, heap_regex_result.group(1), DATA_UNIT, precision=DATA_OUTPUT_PRECISION)
-    heap_usage = Converter.convert(heap_usage, heap_regex_result.group(1), DATA_UNIT, precision=DATA_OUTPUT_PRECISION)
+    heap_total = ByteConverter.convert(heap_total, heap_regex_result.group(1), DATA_UNIT, precision=DATA_OUTPUT_PRECISION)
+    heap_usage = ByteConverter.convert(heap_usage, heap_regex_result.group(1), DATA_UNIT, precision=DATA_OUTPUT_PRECISION)
     if heap_usage > crit_level:
         print_status_information('Critical', 'node heap usage is very high', heap_used=heap_usage, heap_total=heap_total)
     if heap_usage > warn_level:
@@ -120,7 +120,7 @@ def check_load(warn_level=DEFAULTS['load']['warn'], crit_level=DEFAULTS['load'][
     if load_regex_result is None:
         print_status_information('Unknown', 'Unable to retrieve load information')
     load = float(load_regex_result.group(1))
-    load = Converter.convert(load, load_regex_result.group(2), DATA_UNIT, precision=DATA_OUTPUT_PRECISION)
+    load = ByteConverter.convert(load, load_regex_result.group(2), DATA_UNIT, precision=DATA_OUTPUT_PRECISION)
     if load > crit_level:
         print_status_information('Critical', 'node load is very high', noad_load=load)
     if load > warn_level:
@@ -325,8 +325,8 @@ class Binary(NumeralSystem):
         NumeralSystem.__init__(self)
 
 
-class Converter(object):
-    """ Class for performing """
+class ByteConverter(object):
+    """ Class for performing unit conversions between the numeral systems """
     def __init__(self):
         pass
 
@@ -349,12 +349,12 @@ class Converter(object):
 
         # Omitting the numeral system is allowed but results in slightly worse execution performance.
         if _from is None:
-            _from = Converter.get_ns_from_unit(from_type)
+            _from = ByteConverter.get_ns_from_unit(from_type)
         else:
             if _from not in NumeralSystem.__subclasses__():
                 raise NotImplementedError("Unknown numeral system.")
         if to is None:
-            to = Converter.get_ns_from_unit(to_type)
+            to = ByteConverter.get_ns_from_unit(to_type)
         else:
             if to not in NumeralSystem.__subclasses__():
                 raise NotImplementedError("Unknown numeral system.")
@@ -368,8 +368,8 @@ class Converter(object):
             to_type = to_type.upper()
             to_type = to.units.from_string(to_type)
 
-        bytes = Converter._to_bytes(float(value), from_type, _from.base)
-        multitude = Converter._to_multitude(bytes, to_type, to.base)
+        _bytes = ByteConverter._to_bytes(float(value), from_type, _from.base)
+        multitude = ByteConverter._to_multitude(_bytes, to_type, to.base)
         if precision is not None:
             precision = math.pow(10, precision)
             multitude = math.ceil(multitude*precision)/precision
@@ -421,6 +421,7 @@ class Converter(object):
                 if unit in ns.units.reverse_mapping:
                     return ns
         raise NotImplementedError("Unknown numeral system.")
+
 
 if __name__ == '__main__':
     casmon()
