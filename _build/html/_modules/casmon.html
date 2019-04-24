@@ -1,0 +1,532 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <title>casmon &#8212; casmon 1.0 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for casmon</h1><div class="highlight"><pre>
+<span></span><span class="ch">#!/usr/bin/python2</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Python module which provides an interface for querying information from the Cassandra nodetool. This script is</span>
+<span class="sd">intended to be used in combination with the Nagios or Icinga client. The Output format is defined by the Icinga and</span>
+<span class="sd">Nagios rule sets. (https://www.monitoring-plugins.org/doc/guidelines.html)</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="kn">import</span> <span class="nn">math</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">subprocess</span>
+<span class="kn">from</span> <span class="nn">argparse</span> <span class="k">import</span> <span class="n">RawTextHelpFormatter</span>
+
+<span class="c1"># Global warn and crit defaults</span>
+<span class="n">DEFAULTS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;status&#39;</span><span class="p">:</span>   <span class="p">{</span><span class="s1">&#39;warn&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>  <span class="s1">&#39;crit&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">},</span>
+    <span class="s1">&#39;heap&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;warn&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>  <span class="s1">&#39;crit&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">},</span>
+    <span class="s1">&#39;load&#39;</span><span class="p">:</span>     <span class="p">{</span><span class="s1">&#39;warn&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>  <span class="s1">&#39;crit&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">}</span>
+<span class="p">}</span>
+
+<span class="n">DATA_UNIT</span> <span class="o">=</span> <span class="s1">&#39;GB&#39;</span>
+<span class="n">DATA_OUTPUT_PRECISION</span> <span class="o">=</span> <span class="kc">None</span>
+
+<span class="n">NODETOOL</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">normpath</span><span class="p">(</span><span class="s1">&#39;/applications/cassandra/bin/nodetool&#39;</span><span class="p">)</span>
+<span class="n">SHELL</span> <span class="o">=</span> <span class="s1">&#39;/bin/sh&#39;</span>
+
+<span class="n">SERVICE_STATUS</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="s1">&#39;Ok&#39;</span><span class="p">:</span> <span class="mi">0</span><span class="p">,</span>
+    <span class="s1">&#39;Warning&#39;</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+    <span class="s1">&#39;Critical&#39;</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+    <span class="s1">&#39;Unknown&#39;</span><span class="p">:</span> <span class="mi">3</span>
+<span class="p">}</span>
+
+
+<span class="k">def</span> <span class="nf">casmon</span><span class="p">():</span>
+    <span class="n">options</span> <span class="o">=</span> <span class="n">parse_options</span><span class="p">()</span>
+    <span class="n">action</span> <span class="o">=</span> <span class="p">{</span>
+        <span class="s1">&#39;gcstats&#39;</span><span class="p">:</span>  <span class="n">collect_gcstats</span><span class="p">,</span>
+        <span class="s1">&#39;gossip&#39;</span><span class="p">:</span>   <span class="n">check_gossip</span><span class="p">,</span>
+        <span class="s1">&#39;handoff&#39;</span><span class="p">:</span>  <span class="n">check_handoff</span><span class="p">,</span>
+        <span class="s1">&#39;heapusage&#39;</span><span class="p">:</span>    <span class="n">check_heapusage</span><span class="p">,</span>
+        <span class="s1">&#39;load&#39;</span><span class="p">:</span>     <span class="n">check_load</span><span class="p">,</span>
+        <span class="s1">&#39;netstats&#39;</span><span class="p">:</span> <span class="n">collect_netstats</span><span class="p">,</span>
+        <span class="s1">&#39;status&#39;</span><span class="p">:</span>   <span class="n">check_status</span><span class="p">,</span>
+        <span class="s1">&#39;tpstats&#39;</span><span class="p">:</span>  <span class="n">collect_tpstats</span>
+    <span class="p">}</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;unit&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">unit</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">global</span> <span class="n">DATA_UNIT</span>
+            <span class="n">DATA_UNIT</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">unit</span>
+            <span class="n">ByteConverter</span><span class="o">.</span><span class="n">get_ns_from_unit</span><span class="p">(</span><span class="n">DATA_UNIT</span><span class="p">)</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;precision&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">precision</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">global</span> <span class="n">DATA_OUTPUT_PRECISION</span>
+            <span class="n">DATA_OUTPUT_PRECISION</span> <span class="o">=</span> <span class="n">options</span><span class="o">.</span><span class="n">precision</span>
+    <span class="k">if</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;warn_level&#39;</span><span class="p">)</span> <span class="ow">or</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">options</span><span class="p">,</span> <span class="s1">&#39;crit_level&#39;</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">warn_level</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">options</span><span class="o">.</span><span class="n">crit_level</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">action</span><span class="p">[</span><span class="n">options</span><span class="o">.</span><span class="n">action</span><span class="p">](</span><span class="n">warn_level</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">warn_level</span><span class="p">,</span> <span class="n">crit_level</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">crit_level</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">warn_level</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">action</span><span class="p">[</span><span class="n">options</span><span class="o">.</span><span class="n">action</span><span class="p">](</span><span class="n">warn_level</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">warn_level</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">options</span><span class="o">.</span><span class="n">crit_level</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">action</span><span class="p">[</span><span class="n">options</span><span class="o">.</span><span class="n">action</span><span class="p">](</span><span class="n">crit_level</span><span class="o">=</span><span class="n">options</span><span class="o">.</span><span class="n">crit_level</span><span class="p">)</span>
+    <span class="n">action</span><span class="p">[</span><span class="n">options</span><span class="o">.</span><span class="n">action</span><span class="p">]()</span>
+
+
+<div class="viewcode-block" id="collect_gcstats"><a class="viewcode-back" href="../code.html#casmon.collect_gcstats">[docs]</a><span class="k">def</span> <span class="nf">collect_gcstats</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Collect Garbage Collection statistics on the current node.&quot;&quot;&quot;</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">check_output</span><span class="p">([</span><span class="n">NODETOOL</span><span class="p">,</span> <span class="s1">&#39;gcstats&#39;</span><span class="p">])</span>
+    <span class="n">line_columns</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+    <span class="n">stats</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;interval&#39;</span><span class="p">,</span> <span class="s1">&#39;max_gc_elapsed&#39;</span><span class="p">,</span> <span class="s1">&#39;total_gc_elapsed&#39;</span><span class="p">,</span> <span class="s1">&#39;stdev_gc_elapsed&#39;</span><span class="p">,</span> <span class="s1">&#39;gc_reclaimed&#39;</span><span class="p">]</span>
+    <span class="n">gc_stats</span> <span class="o">=</span> <span class="p">{}</span>
+
+    <span class="k">for</span> <span class="n">i</span><span class="p">,</span> <span class="n">stat</span> <span class="ow">in</span> <span class="nb">enumerate</span><span class="p">(</span><span class="n">stats</span><span class="p">):</span>
+        <span class="n">gc_stats</span><span class="p">[</span><span class="n">stat</span><span class="p">]</span> <span class="o">=</span> <span class="n">line_columns</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+    <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Ok&#39;</span><span class="p">,</span> <span class="s1">&#39;Garbage Collection statistics&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">gc_stats</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="check_gossip"><a class="viewcode-back" href="../code.html#casmon.check_gossip">[docs]</a><span class="k">def</span> <span class="nf">check_gossip</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Check Status of gossip.&quot;&quot;&quot;</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">check_output</span><span class="p">([</span><span class="n">NODETOOL</span><span class="p">,</span> <span class="s1">&#39;statusgossip&#39;</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;^running&#39;</span><span class="p">,</span> <span class="n">res</span><span class="p">):</span>
+        <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Ok&#39;</span><span class="p">,</span> <span class="s1">&#39;Gossip is running&#39;</span><span class="p">)</span>
+    <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Critical&#39;</span><span class="p">,</span> <span class="s1">&#39;Gossip is not running&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="check_handoff"><a class="viewcode-back" href="../code.html#casmon.check_handoff">[docs]</a><span class="k">def</span> <span class="nf">check_handoff</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;Check Status of Hinted Handoff (Status of storing future hints on the current node).&quot;&quot;&quot;</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">check_output</span><span class="p">([</span><span class="n">NODETOOL</span><span class="p">,</span> <span class="s1">&#39;statushandoff&#39;</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;^Hinted handoff is running&#39;</span><span class="p">,</span> <span class="n">res</span><span class="p">):</span>
+        <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Ok&#39;</span><span class="p">,</span> <span class="s1">&#39;Hinted handoff is running&#39;</span><span class="p">)</span>
+    <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Warning&#39;</span><span class="p">,</span> <span class="s1">&#39;Hinted handoff is not running&#39;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="check_heapusage"><a class="viewcode-back" href="../code.html#casmon.check_heapusage">[docs]</a><span class="k">def</span> <span class="nf">check_heapusage</span><span class="p">(</span><span class="n">warn_level</span><span class="o">=</span><span class="n">DEFAULTS</span><span class="p">[</span><span class="s1">&#39;heap&#39;</span><span class="p">][</span><span class="s1">&#39;warn&#39;</span><span class="p">],</span> <span class="n">crit_level</span><span class="o">=</span><span class="n">DEFAULTS</span><span class="p">[</span><span class="s1">&#39;heap&#39;</span><span class="p">][</span><span class="s1">&#39;crit&#39;</span><span class="p">]):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Collects information about the heap usage on this host.</span>
+
+<span class="sd">    :param warn_level: Maximum amount of heap usage, before a warning will be triggered</span>
+<span class="sd">    :param crit_level: Maximum amount of heap usage, before a critical warning will be triggered</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">check_output</span><span class="p">([</span><span class="n">NODETOOL</span><span class="p">,</span> <span class="s1">&#39;info&#39;</span><span class="p">])</span>
+    <span class="n">heap_regex_result</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;Heap Memory \((\w+)\)\s*:\s*([\d,.]+)\s/\s([\d,.]+)&#39;</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">heap_regex_result</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Unknown&#39;</span><span class="p">,</span> <span class="s1">&#39;Unable to retrieve heap information&#39;</span><span class="p">)</span>
+    <span class="n">heap_total</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">heap_regex_result</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">3</span><span class="p">))</span>
+    <span class="n">heap_usage</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">heap_regex_result</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+    <span class="n">heap_total</span> <span class="o">=</span> <span class="n">ByteConverter</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="n">heap_total</span><span class="p">,</span> <span class="n">heap_regex_result</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">DATA_UNIT</span><span class="p">,</span> <span class="n">precision</span><span class="o">=</span><span class="n">DATA_OUTPUT_PRECISION</span><span class="p">)</span>
+    <span class="n">heap_usage</span> <span class="o">=</span> <span class="n">ByteConverter</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="n">heap_usage</span><span class="p">,</span> <span class="n">heap_regex_result</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">),</span> <span class="n">DATA_UNIT</span><span class="p">,</span> <span class="n">precision</span><span class="o">=</span><span class="n">DATA_OUTPUT_PRECISION</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">heap_usage</span> <span class="o">&gt;</span> <span class="n">crit_level</span><span class="p">:</span>
+        <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Critical&#39;</span><span class="p">,</span> <span class="s1">&#39;node heap usage is very high&#39;</span><span class="p">,</span> <span class="n">heap_used</span><span class="o">=</span><span class="n">heap_usage</span><span class="p">,</span> <span class="n">heap_total</span><span class="o">=</span><span class="n">heap_total</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">heap_usage</span> <span class="o">&gt;</span> <span class="n">warn_level</span><span class="p">:</span>
+        <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Warning&#39;</span><span class="p">,</span> <span class="s1">&#39;node heap usage is high&#39;</span><span class="p">,</span> <span class="n">heap_used</span><span class="o">=</span><span class="n">heap_usage</span><span class="p">,</span> <span class="n">heap_total</span><span class="o">=</span><span class="n">heap_total</span><span class="p">)</span>
+    <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Ok&#39;</span><span class="p">,</span> <span class="s1">&#39;Heap usage is normal&#39;</span><span class="p">,</span> <span class="n">heap_used</span><span class="o">=</span><span class="n">heap_usage</span><span class="p">,</span> <span class="n">heap_total</span><span class="o">=</span><span class="n">heap_total</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="check_load"><a class="viewcode-back" href="../code.html#casmon.check_load">[docs]</a><span class="k">def</span> <span class="nf">check_load</span><span class="p">(</span><span class="n">warn_level</span><span class="o">=</span><span class="n">DEFAULTS</span><span class="p">[</span><span class="s1">&#39;load&#39;</span><span class="p">][</span><span class="s1">&#39;warn&#39;</span><span class="p">],</span> <span class="n">crit_level</span><span class="o">=</span><span class="n">DEFAULTS</span><span class="p">[</span><span class="s1">&#39;load&#39;</span><span class="p">][</span><span class="s1">&#39;crit&#39;</span><span class="p">]):</span>
+    <span class="sd">&quot;&quot;&quot; Check load of the current node. &quot;&quot;&quot;</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">check_output</span><span class="p">([</span><span class="n">NODETOOL</span><span class="p">,</span> <span class="s1">&#39;info&#39;</span><span class="p">])</span>
+    <span class="n">load_regex_result</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;Load\s*:\s*([\d,.]+)\s(\w+)&#39;</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">load_regex_result</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Unknown&#39;</span><span class="p">,</span> <span class="s1">&#39;Unable to retrieve load information&#39;</span><span class="p">)</span>
+    <span class="n">load</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">load_regex_result</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">load</span> <span class="o">=</span> <span class="n">ByteConverter</span><span class="o">.</span><span class="n">convert</span><span class="p">(</span><span class="n">load</span><span class="p">,</span> <span class="n">load_regex_result</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">DATA_UNIT</span><span class="p">,</span> <span class="n">precision</span><span class="o">=</span><span class="n">DATA_OUTPUT_PRECISION</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">load</span> <span class="o">&gt;</span> <span class="n">crit_level</span><span class="p">:</span>
+        <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Critical&#39;</span><span class="p">,</span> <span class="s1">&#39;node load is very high&#39;</span><span class="p">,</span> <span class="n">noad_load</span><span class="o">=</span><span class="n">load</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">load</span> <span class="o">&gt;</span> <span class="n">warn_level</span><span class="p">:</span>
+        <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Warning&#39;</span><span class="p">,</span> <span class="s1">&#39;node load is high&#39;</span><span class="p">,</span> <span class="n">noad_load</span><span class="o">=</span><span class="n">load</span><span class="p">)</span>
+    <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Ok&#39;</span><span class="p">,</span> <span class="s1">&#39;node load is normal&#39;</span><span class="p">,</span> <span class="n">noad_load</span><span class="o">=</span><span class="n">load</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="collect_netstats"><a class="viewcode-back" href="../code.html#casmon.collect_netstats">[docs]</a><span class="k">def</span> <span class="nf">collect_netstats</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot; Collect network statistics on the current node. &quot;&quot;&quot;</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">check_output</span><span class="p">([</span><span class="n">NODETOOL</span><span class="p">,</span> <span class="s1">&#39;netstats&#39;</span><span class="p">])</span>
+    <span class="n">res_lines</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+    <span class="n">message_stats</span> <span class="o">=</span> <span class="n">res_lines</span><span class="p">[</span><span class="nb">len</span><span class="p">(</span><span class="n">res_lines</span><span class="p">)</span><span class="o">-</span><span class="mi">3</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">res_lines</span><span class="p">)]</span>
+    <span class="n">type_prefix</span> <span class="o">=</span> <span class="p">[</span><span class="s1">&#39;lm_&#39;</span><span class="p">,</span> <span class="s1">&#39;sm_&#39;</span><span class="p">,</span> <span class="s1">&#39;gm_&#39;</span><span class="p">]</span>
+    <span class="n">stats</span> <span class="o">=</span> <span class="p">{}</span>
+    <span class="k">for</span> <span class="n">prefix</span> <span class="ow">in</span> <span class="n">type_prefix</span><span class="p">:</span>
+        <span class="n">line_columns</span> <span class="o">=</span> <span class="n">message_stats</span><span class="p">[</span><span class="n">type_prefix</span><span class="o">.</span><span class="n">index</span><span class="p">(</span><span class="n">prefix</span><span class="p">)]</span><span class="o">.</span><span class="n">split</span><span class="p">()</span>
+        <span class="n">stats</span><span class="p">[</span><span class="n">prefix</span> <span class="o">+</span> <span class="s1">&#39;pending&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">line_columns</span><span class="p">[</span><span class="mi">3</span><span class="p">]</span>
+        <span class="n">stats</span><span class="p">[</span><span class="n">prefix</span> <span class="o">+</span> <span class="s1">&#39;completed&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">line_columns</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span>
+        <span class="n">stats</span><span class="p">[</span><span class="n">prefix</span> <span class="o">+</span> <span class="s1">&#39;dropped&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">line_columns</span><span class="p">[</span><span class="mi">5</span><span class="p">]</span>
+    <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Ok&#39;</span><span class="p">,</span> <span class="s1">&#39;Netstats&#39;</span><span class="p">,</span> <span class="o">**</span><span class="n">stats</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="check_status"><a class="viewcode-back" href="../code.html#casmon.check_status">[docs]</a><span class="k">def</span> <span class="nf">check_status</span><span class="p">(</span><span class="n">warn_level</span><span class="o">=</span><span class="n">DEFAULTS</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">][</span><span class="s1">&#39;warn&#39;</span><span class="p">],</span> <span class="n">crit_level</span><span class="o">=</span><span class="n">DEFAULTS</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">][</span><span class="s1">&#39;crit&#39;</span><span class="p">]):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Collects information about status and availability of the cassandra nodes.</span>
+
+<span class="sd">    :param warn_level: Maximum amount of nodes down, before a warning will be triggered</span>
+<span class="sd">    :param crit_level: Maximum amount of nodes down, before a critical warning will be triggered</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">res</span> <span class="o">=</span> <span class="n">subprocess</span><span class="o">.</span><span class="n">check_output</span><span class="p">([</span><span class="n">NODETOOL</span><span class="p">,</span> <span class="s1">&#39;status&#39;</span><span class="p">])</span>
+    <span class="n">res_lines</span> <span class="o">=</span> <span class="n">res</span><span class="o">.</span><span class="n">splitlines</span><span class="p">()</span>
+    <span class="n">dc_regex_result</span> <span class="o">=</span> <span class="n">re</span><span class="o">.</span><span class="n">search</span><span class="p">(</span><span class="sa">r</span><span class="s1">&#39;^Datacenter:\s([\w\d]+)&#39;</span><span class="p">,</span> <span class="n">res</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">dc_regex_result</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Unknown&#39;</span><span class="p">,</span> <span class="s1">&#39;Unable to retrieve datacenter information&#39;</span><span class="p">)</span>
+    <span class="n">dc</span> <span class="o">=</span> <span class="n">dc_regex_result</span><span class="o">.</span><span class="n">group</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+    <span class="n">nodes_down</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">res_lines</span><span class="p">[</span><span class="mi">5</span><span class="p">:</span><span class="nb">len</span><span class="p">(</span><span class="n">res_lines</span><span class="p">)</span><span class="o">-</span><span class="mi">1</span><span class="p">]:</span>
+        <span class="n">status</span> <span class="o">=</span> <span class="n">line</span><span class="p">[:</span><span class="mi">2</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">status</span> <span class="o">!=</span> <span class="s1">&#39;UN&#39;</span><span class="p">:</span>
+            <span class="n">nodes_down</span> <span class="o">+=</span> <span class="mi">1</span>
+    <span class="k">if</span> <span class="n">nodes_down</span> <span class="o">&gt;</span> <span class="n">crit_level</span><span class="p">:</span>
+        <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Critical&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">nodes_down</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; node(s) down&#39;</span><span class="p">,</span> <span class="n">dc</span><span class="o">=</span><span class="n">dc</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">nodes_down</span> <span class="o">&gt;</span> <span class="n">warn_level</span><span class="p">:</span>
+        <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Warning&#39;</span><span class="p">,</span> <span class="nb">str</span><span class="p">(</span><span class="n">nodes_down</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; node(s) down&#39;</span><span class="p">,</span> <span class="n">dc</span><span class="o">=</span><span class="n">dc</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">nodes_down</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Ok&#39;</span><span class="p">,</span> <span class="s1">&#39;All nodes are up and running&#39;</span><span class="p">,</span> <span class="n">dc</span><span class="o">=</span><span class="n">dc</span><span class="p">)</span>
+    <span class="n">print_status_information</span><span class="p">(</span><span class="s1">&#39;Ok&#39;</span><span class="p">,</span> <span class="s1">&#39;Enough nodes are up and running&#39;</span><span class="p">,</span> <span class="n">dc</span><span class="o">=</span><span class="n">dc</span><span class="p">)</span></div>
+
+
+<span class="k">def</span> <span class="nf">collect_tpstats</span><span class="p">():</span>
+    <span class="k">pass</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    res = subprocess.check_output([NODETOOL, &#39;tpstats&#39;])</span>
+<span class="sd">    res_lines = res.splitlines()</span>
+
+<span class="sd">    tpstats = {}</span>
+<span class="sd">    print_status_information(&#39;Ok&#39;, &#39;Tpstats&#39;, **tpstats)    </span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+
+<div class="viewcode-block" id="parse_options"><a class="viewcode-back" href="../code.html#casmon.parse_options">[docs]</a><span class="k">def</span> <span class="nf">parse_options</span><span class="p">():</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Parse the arguments this script was called with.</span>
+
+<span class="sd">    :return: Options as Namespace</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">global</span> <span class="n">parser</span>
+    <span class="n">parser</span> <span class="o">=</span> <span class="n">argparse</span><span class="o">.</span><span class="n">ArgumentParser</span><span class="p">(</span>
+        <span class="n">description</span><span class="o">=</span><span class="s1">&#39;Collect and return monitoring information of cassandra nodes or database.&#39;</span><span class="p">,</span>
+        <span class="n">formatter_class</span><span class="o">=</span><span class="n">RawTextHelpFormatter</span>    <span class="c1"># Enable multiline help Strings</span>
+    <span class="p">)</span>
+
+    <span class="c1"># help=&#39;Gather information and print to stdout&#39;</span>
+    <span class="n">subparsers</span> <span class="o">=</span> <span class="n">parser</span><span class="o">.</span><span class="n">add_subparsers</span><span class="p">()</span>
+    <span class="n">parser_check</span> <span class="o">=</span> <span class="n">subparsers</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s1">&#39;check&#39;</span><span class="p">,</span> <span class="n">formatter_class</span><span class="o">=</span><span class="n">RawTextHelpFormatter</span><span class="p">)</span>
+    <span class="n">parser_check</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s1">&#39;-w&#39;</span><span class="p">,</span> <span class="s1">&#39;--warning&#39;</span><span class="p">,</span>
+        <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;warn_level&#39;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Display warning status if the specified limit is exceeded&#39;</span>
+    <span class="p">)</span>
+    <span class="n">parser_check</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s1">&#39;-c&#39;</span><span class="p">,</span> <span class="s1">&#39;--critical&#39;</span><span class="p">,</span>
+        <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;crit_level&#39;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">float</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Display critical status if the specified limit is exceeded&#39;</span>
+    <span class="p">)</span>
+    <span class="n">parser_check</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s1">&#39;-u&#39;</span><span class="p">,</span> <span class="s1">&#39;--unit&#39;</span><span class="p">,</span>
+        <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;unit&#39;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">str</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Set in-/output data unit (Default: &#39;</span> <span class="o">+</span> <span class="n">DATA_UNIT</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span>
+    <span class="p">)</span>
+    <span class="n">parser_check</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s1">&#39;-p&#39;</span><span class="p">,</span> <span class="s1">&#39;--precision&#39;</span><span class="p">,</span>
+        <span class="n">dest</span><span class="o">=</span><span class="s1">&#39;precision&#39;</span><span class="p">,</span>
+        <span class="nb">type</span><span class="o">=</span><span class="nb">int</span><span class="p">,</span>
+        <span class="n">required</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+        <span class="n">help</span><span class="o">=</span><span class="s1">&#39;Set output data precision / number of fractional digits (Default: &#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">DATA_OUTPUT_PRECISION</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;)&#39;</span>
+    <span class="p">)</span>
+    <span class="n">parser_check</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s1">&#39;action&#39;</span><span class="p">,</span>
+        <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;status&#39;</span><span class="p">,</span> <span class="s1">&#39;heapusage&#39;</span><span class="p">,</span> <span class="s1">&#39;load&#39;</span><span class="p">],</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;status = Check status of cassandra nodes&quot;&quot;&quot;</span> <span class="o">+</span>
+             <span class="sd">&quot;&quot;&quot;\nheap = Check heap usage of current node&quot;&quot;&quot;</span> <span class="o">+</span>
+             <span class="sd">&quot;&quot;&quot;\nload = Check load of current node&quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">parser_status</span> <span class="o">=</span> <span class="n">subparsers</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s1">&#39;status&#39;</span><span class="p">,</span> <span class="n">formatter_class</span><span class="o">=</span><span class="n">RawTextHelpFormatter</span><span class="p">)</span>
+    <span class="n">parser_status</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s1">&#39;action&#39;</span><span class="p">,</span>
+        <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;gossip&#39;</span><span class="p">,</span> <span class="s1">&#39;handoff&#39;</span><span class="p">],</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;gossip = Status of gossip&quot;&quot;&quot;</span> <span class="o">+</span>
+             <span class="sd">&quot;&quot;&quot;\nhandoff = Status of storing future hints on the current node&quot;&quot;&quot;</span>
+    <span class="p">)</span>
+
+    <span class="n">parser_collect</span> <span class="o">=</span> <span class="n">subparsers</span><span class="o">.</span><span class="n">add_parser</span><span class="p">(</span><span class="s1">&#39;collect&#39;</span><span class="p">,</span> <span class="n">formatter_class</span><span class="o">=</span><span class="n">RawTextHelpFormatter</span><span class="p">)</span>
+    <span class="n">parser_collect</span><span class="o">.</span><span class="n">add_argument</span><span class="p">(</span>
+        <span class="s1">&#39;action&#39;</span><span class="p">,</span>
+        <span class="n">choices</span><span class="o">=</span><span class="p">[</span><span class="s1">&#39;netstats&#39;</span><span class="p">,</span> <span class="s1">&#39;gcstats&#39;</span><span class="p">],</span>
+        <span class="n">help</span><span class="o">=</span><span class="s2">&quot;&quot;&quot;netstats = Network statistics&quot;&quot;&quot;</span> <span class="o">+</span>
+             <span class="sd">&quot;&quot;&quot;\ngcstats = Garbage Collection statistics&quot;&quot;&quot;</span>
+    <span class="p">)</span>
+    <span class="k">return</span> <span class="n">parser</span><span class="o">.</span><span class="n">parse_args</span><span class="p">()</span></div>
+
+
+<div class="viewcode-block" id="print_status_information"><a class="viewcode-back" href="../code.html#casmon.print_status_information">[docs]</a><span class="k">def</span> <span class="nf">print_status_information</span><span class="p">(</span><span class="n">status</span><span class="p">,</span> <span class="n">msg</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Prints service status to stdout. Output is formatted according to the Nagios / Icinga formatting rules.</span>
+<span class="sd">    (https://www.monitoring-plugins.org/doc/guidelines.html#PLUGOUTPUT)</span>
+
+<span class="sd">    :param status: Exit status</span>
+<span class="sd">    :param msg: Service status message</span>
+<span class="sd">    :param kwargs: Performance data for monitoring</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">status</span> <span class="ow">in</span> <span class="n">SERVICE_STATUS</span><span class="p">:</span>
+        <span class="n">code</span> <span class="o">=</span> <span class="n">SERVICE_STATUS</span><span class="p">[</span><span class="n">status</span><span class="p">]</span>
+        <span class="n">status_msg</span> <span class="o">=</span> <span class="n">status</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">status_msg</span> <span class="o">=</span> <span class="s1">&#39;Unknown&#39;</span>
+        <span class="n">code</span> <span class="o">=</span> <span class="n">SERVICE_STATUS</span><span class="p">[</span><span class="n">status_msg</span><span class="p">]</span>
+    <span class="n">kwargs_str</span> <span class="o">=</span> <span class="s1">&#39;&#39;</span>
+    <span class="n">status_information</span> <span class="o">=</span> <span class="n">status_msg</span> <span class="o">+</span> <span class="s1">&#39;: &#39;</span> <span class="o">+</span> <span class="n">msg</span>
+    <span class="k">for</span> <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">iteritems</span><span class="p">():</span>
+        <span class="n">kwargs_str</span> <span class="o">+=</span> <span class="nb">str</span><span class="p">(</span><span class="n">k</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39;=&#39;</span> <span class="o">+</span> <span class="nb">str</span><span class="p">(</span><span class="n">v</span><span class="p">)</span> <span class="o">+</span> <span class="s1">&#39; &#39;</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">kwargs</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+        <span class="n">status_information</span> <span class="o">+=</span> <span class="s1">&#39; | &#39;</span> <span class="o">+</span> <span class="n">kwargs_str</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">status_information</span><span class="p">)</span>
+    <span class="n">exit</span><span class="p">(</span><span class="n">code</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="enum"><a class="viewcode-back" href="../code.html#casmon.enum">[docs]</a><span class="k">def</span> <span class="nf">enum</span><span class="p">(</span><span class="o">*</span><span class="n">sequential</span><span class="p">,</span> <span class="o">**</span><span class="n">named</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Enum backport for Python2.x</span>
+
+<span class="sd">    Usage: myenum = enum(&#39;KIB&#39;, &#39;MIB&#39;</span>
+<span class="sd">    Access: myenum.KIB</span>
+
+<span class="sd">    :param type: Object type (required for later checking)</span>
+<span class="sd">    :param sequential:</span>
+<span class="sd">    :param named:</span>
+<span class="sd">    :return: Enum</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">enums</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span><span class="nb">zip</span><span class="p">(</span><span class="n">sequential</span><span class="p">,</span> <span class="nb">range</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">sequential</span><span class="p">))),</span> <span class="o">**</span><span class="n">named</span><span class="p">)</span>
+    <span class="n">reverse</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">((</span><span class="n">value</span><span class="p">,</span> <span class="n">key</span><span class="p">)</span> <span class="k">for</span> <span class="n">key</span><span class="p">,</span> <span class="n">value</span> <span class="ow">in</span> <span class="n">enums</span><span class="o">.</span><span class="n">iteritems</span><span class="p">())</span>
+    <span class="n">enums</span><span class="p">[</span><span class="s1">&#39;reverse_mapping&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">reverse</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">from_string</span><span class="p">(</span><span class="n">text</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">enums</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">text</span><span class="p">)</span>
+
+    <span class="n">enums</span><span class="p">[</span><span class="s1">&#39;from_string&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">from_string</span>
+    <span class="n">enums</span><span class="p">[</span><span class="s1">&#39;items&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span><span class="n">i</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">sequential</span><span class="p">]</span>
+    <span class="k">return</span> <span class="nb">type</span><span class="p">(</span><span class="s1">&#39;Enum&#39;</span><span class="p">,</span> <span class="p">(),</span> <span class="n">enums</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="NumeralSystem"><a class="viewcode-back" href="../code.html#casmon.NumeralSystem">[docs]</a><span class="k">class</span> <span class="nc">NumeralSystem</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Base Class for creating numeral systems &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span></div>
+
+
+<div class="viewcode-block" id="Decimal"><a class="viewcode-back" href="../code.html#casmon.Decimal">[docs]</a><span class="k">class</span> <span class="nc">Decimal</span><span class="p">(</span><span class="n">NumeralSystem</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Decimal numeral system &quot;&quot;&quot;</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="mi">1000</span>
+    <span class="n">units</span> <span class="o">=</span> <span class="n">enum</span><span class="p">(</span><span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="s1">&#39;KB&#39;</span><span class="p">,</span> <span class="s1">&#39;MB&#39;</span><span class="p">,</span> <span class="s1">&#39;GB&#39;</span><span class="p">,</span> <span class="s1">&#39;TB&#39;</span><span class="p">,</span> <span class="s1">&#39;PB&#39;</span><span class="p">,</span> <span class="s1">&#39;EB&#39;</span><span class="p">,</span> <span class="s1">&#39;ZB&#39;</span><span class="p">,</span> <span class="s1">&#39;YB&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">NumeralSystem</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="Binary"><a class="viewcode-back" href="../code.html#casmon.Binary">[docs]</a><span class="k">class</span> <span class="nc">Binary</span><span class="p">(</span><span class="n">NumeralSystem</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Binary numeral system &quot;&quot;&quot;</span>
+    <span class="n">base</span> <span class="o">=</span> <span class="mi">1024</span>
+    <span class="n">units</span> <span class="o">=</span> <span class="n">enum</span><span class="p">(</span><span class="s1">&#39;B&#39;</span><span class="p">,</span> <span class="s1">&#39;KIB&#39;</span><span class="p">,</span> <span class="s1">&#39;MIB&#39;</span><span class="p">,</span> <span class="s1">&#39;GIB&#39;</span><span class="p">,</span> <span class="s1">&#39;TIB&#39;</span><span class="p">,</span> <span class="s1">&#39;PIB&#39;</span><span class="p">,</span> <span class="s1">&#39;EIB&#39;</span><span class="p">,</span> <span class="s1">&#39;ZIB&#39;</span><span class="p">,</span> <span class="s1">&#39;YIB&#39;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="n">NumeralSystem</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="ByteConverter"><a class="viewcode-back" href="../code.html#casmon.ByteConverter">[docs]</a><span class="k">class</span> <span class="nc">ByteConverter</span><span class="p">(</span><span class="nb">object</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot; Class for performing unit conversions between the numeral systems &quot;&quot;&quot;</span>
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">pass</span>
+
+<div class="viewcode-block" id="ByteConverter.convert"><a class="viewcode-back" href="../code.html#casmon.ByteConverter.convert">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">convert</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">from_type</span><span class="p">,</span> <span class="n">to_type</span><span class="p">,</span> <span class="n">_from</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">to</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">precision</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Converts a number to the desired numeral system and unit.</span>
+
+<span class="sd">        :param value: Value to be converted</span>
+<span class="sd">        :param _from: Current numeral system</span>
+<span class="sd">        :param to: Required numeral system</span>
+<span class="sd">        :param from_type: Current unit of the number (case insensitive)</span>
+<span class="sd">                          e.g. &#39;MIB&#39; or Binary.units.MIB</span>
+<span class="sd">        :param to_type: Required unit of the number (case insensitive)</span>
+<span class="sd">                        e.g. &#39;mb&#39; or Decimal.units.MB</span>
+<span class="sd">        :param precision:   Amount of fractional digits. (e.g: precision = 3 -&gt; result = 64.135)</span>
+<span class="sd">                            The last digit is rounded up.</span>
+<span class="sd">        :return: The result of the conversion</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+
+        <span class="c1"># Omitting the numeral system is allowed but results in slightly worse execution performance.</span>
+        <span class="k">if</span> <span class="n">_from</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">_from</span> <span class="o">=</span> <span class="n">ByteConverter</span><span class="o">.</span><span class="n">get_ns_from_unit</span><span class="p">(</span><span class="n">from_type</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">_from</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">NumeralSystem</span><span class="o">.</span><span class="n">__subclasses__</span><span class="p">():</span>
+                <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Unknown numeral system.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">to</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">to</span> <span class="o">=</span> <span class="n">ByteConverter</span><span class="o">.</span><span class="n">get_ns_from_unit</span><span class="p">(</span><span class="n">to_type</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">to</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">NumeralSystem</span><span class="o">.</span><span class="n">__subclasses__</span><span class="p">():</span>
+                <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Unknown numeral system.&quot;</span><span class="p">)</span>
+
+        <span class="c1"># Allow specification of data unit as str instead of enforcing the specification over the enum</span>
+        <span class="c1"># e.g.: &#39;mib&#39; | &#39;MB&#39;    instead of    Binary.units.MIB | Binary.units.MB</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">from_type</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="n">from_type</span> <span class="o">=</span> <span class="n">from_type</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+            <span class="n">from_type</span> <span class="o">=</span> <span class="n">_from</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="n">from_type</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">to_type</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">str</span><span class="p">:</span>
+            <span class="n">to_type</span> <span class="o">=</span> <span class="n">to_type</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+            <span class="n">to_type</span> <span class="o">=</span> <span class="n">to</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">from_string</span><span class="p">(</span><span class="n">to_type</span><span class="p">)</span>
+
+        <span class="n">_bytes</span> <span class="o">=</span> <span class="n">ByteConverter</span><span class="o">.</span><span class="n">_to_bytes</span><span class="p">(</span><span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">),</span> <span class="n">from_type</span><span class="p">,</span> <span class="n">_from</span><span class="o">.</span><span class="n">base</span><span class="p">)</span>
+        <span class="n">multitude</span> <span class="o">=</span> <span class="n">ByteConverter</span><span class="o">.</span><span class="n">_to_multitude</span><span class="p">(</span><span class="n">_bytes</span><span class="p">,</span> <span class="n">to_type</span><span class="p">,</span> <span class="n">to</span><span class="o">.</span><span class="n">base</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">precision</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">precision</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">pow</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="n">precision</span><span class="p">)</span>
+            <span class="n">multitude</span> <span class="o">=</span> <span class="n">math</span><span class="o">.</span><span class="n">ceil</span><span class="p">(</span><span class="n">multitude</span><span class="o">*</span><span class="n">precision</span><span class="p">)</span><span class="o">/</span><span class="n">precision</span>
+        <span class="k">return</span> <span class="n">multitude</span></div>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_to_bytes</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">iter_count</span><span class="p">,</span> <span class="n">base</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Convert a value to bytes</span>
+
+<span class="sd">        :param value:</span>
+<span class="sd">        :param iter_count: The number of iterations required</span>
+<span class="sd">        :param base: The numeral system base</span>
+<span class="sd">        :return: The value in bytes</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">iter_count</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">*</span> <span class="nb">float</span><span class="p">(</span><span class="n">base</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+
+    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">_to_multitude</span><span class="p">(</span><span class="n">value</span><span class="p">,</span> <span class="n">iter_count</span><span class="p">,</span> <span class="n">base</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Convert a byte value to a higher order of magnitude</span>
+
+<span class="sd">        :param value:</span>
+<span class="sd">        :param iter_count: The number of iterations required</span>
+<span class="sd">        :param base: The numeral system base</span>
+<span class="sd">        :return: The value in the required order of multitude</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">iter_count</span><span class="p">):</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="nb">float</span><span class="p">(</span><span class="n">value</span><span class="p">)</span> <span class="o">/</span> <span class="nb">float</span><span class="p">(</span><span class="n">base</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">value</span>
+
+<div class="viewcode-block" id="ByteConverter.get_ns_from_unit"><a class="viewcode-back" href="../code.html#casmon.ByteConverter.get_ns_from_unit">[docs]</a>    <span class="nd">@staticmethod</span>
+    <span class="k">def</span> <span class="nf">get_ns_from_unit</span><span class="p">(</span><span class="n">unit</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Retrieve numeral system from unit str</span>
+
+<span class="sd">        :param unit: The unit as str</span>
+<span class="sd">        :return: The numeral system class</span>
+<span class="sd">        :raise NotImplementedError: If the numeral system could not be identified.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">unit</span> <span class="o">=</span> <span class="n">unit</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+        <span class="k">for</span> <span class="n">ns</span> <span class="ow">in</span> <span class="n">NumeralSystem</span><span class="o">.</span><span class="n">__subclasses__</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">unit</span><span class="p">)</span> <span class="ow">is</span> <span class="nb">str</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">unit</span> <span class="ow">in</span> <span class="n">ns</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">items</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">ns</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">unit</span> <span class="ow">in</span> <span class="n">ns</span><span class="o">.</span><span class="n">units</span><span class="o">.</span><span class="n">reverse_mapping</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="n">ns</span>
+        <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;Unknown numeral system.&quot;</span><span class="p">)</span></div></div>
+
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s1">&#39;__main__&#39;</span><span class="p">:</span>
+    <span class="n">casmon</span><span class="p">()</span>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">casmon</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../code.html">Code docs</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+      <input type="hidden" name="check_keywords" value="yes" />
+      <input type="hidden" name="area" value="default" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, jhartick.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 1.8.5</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>
