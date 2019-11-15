@@ -1,6 +1,6 @@
 # casmon
 
-### A Apache Cassandra monitoring plugin for Nagios.
+### An Apache Cassandra monitoring plugin for Nagios.
 
 This module gathers performance relevant information from the installed cluster and outputs it according to the Nagios monitoring plugin development guidelines which can be found [here](https://www.monitoring-plugins.org/doc/guidelines.html).
 
